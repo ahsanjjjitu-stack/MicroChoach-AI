@@ -6,6 +6,12 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 
 
+
+// set dns servers to avoid DNS resolution issues
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
+
 const app = express();
 
 // google auth client setup
