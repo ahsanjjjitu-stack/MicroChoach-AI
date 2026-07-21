@@ -36,7 +36,7 @@ try{
     // verify idToken
     const ticket = await client.verifyIdToken({
         idToken,
-        audience: process.env.GOOFLE_CLIENT_ID
+        audience: process.env.GOOGLE_CLIENT_ID
     });
 
     const payload = ticket.getPayload();
@@ -57,7 +57,7 @@ try{
         success: true,
         message: "Login successfull",
         userId: user._id,
-        token: apptoken
+        token: token
     });
 
 
