@@ -1,9 +1,14 @@
 require('dotenv').config();
 const express = require('express');
+const app = express();
 const mongoose = require('mongoose');
 const {OAuth2Client} = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const User = require('./models/User');
+
+
+app.use(express.json()); 
+app.use(express.urlencoded({ extended: true }));
 
 
 
@@ -27,7 +32,8 @@ mongoose.connect(process.env.MONGO_URL)
 app.post('/api/auth/google-login', async (req, res) => {
 
 try{
-
+    
+     console.log("Received Body:", req.body);
     const {idToken} = req.body;
     if (!idToken) {
             return res.status(400).json({ success: false, message: "idToken is required" });
