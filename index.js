@@ -124,19 +124,26 @@ app.post('/api/notes/process-image', async (req, res) => {
         }
 
 
-        const prompt = `Analyze the attached image of study notes or text. 
-            Extract the content and return a strict JSON object with this exact structure:
-            {
-              "title": "Short suitable title derived from content",
-              "summary": "Concise high-level summary of the note",
-              "keyPoints": ["Point 1", "Point 2", "Point 3"],
-              "flashcards": [
-                { "question": "Q1", "answer": "A1" },
-                { "question": "Q2", "answer": "A2" }
+        const prompt = `
+             Analyze the attached image of study notes or text carefully. 
+             Extract the content and return a STRICT JSON object with this exact structure:
+             {
+                "title": "Short suitable title derived from content",
+                  "summary": "Concise high-level summary of the note",
+            "keyPoints": [
+                "Key point 1", 
+                "Key point 2"
+               ],
+           "flashcards": [
+                { "question": "Question 1 based on the note?", "answer": "Answer 1" },
+                { "question": "Question 2 based on the note?", "answer": "Answer 2" }
               ]
-            }
-            Do not include any markdown formatting (like \`\`\`json) or extra explanation text. Only output raw JSON.
-        `;
+           }
+
+            CRITICAL RULES:
+                  1. "flashcards" MUST contain at least 2 to 4 Question & Answer pairs based on the text. DO NOT leave it empty.
+                  2. Output ONLY raw JSON. Do NOT include markdown code blocks (like \`\`\`json) or extra text.
+          `;
 
 
 
