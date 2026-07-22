@@ -124,26 +124,34 @@ app.post('/api/notes/process-image', async (req, res) => {
         }
 
 
-        const prompt = `
-             Analyze the attached image of study notes or text carefully. 
-             Extract the content and return a STRICT JSON object with this exact structure:
-             {
-                "title": "Short suitable title derived from content",
-                  "summary": "Concise high-level summary of the note",
-            "keyPoints": [
-                "Key point 1", 
-                "Key point 2"
-               ],
-           "flashcards": [
-                { "question": "Question 1 based on the note?", "answer": "Answer 1" },
-                { "question": "Question 2 based on the note?", "answer": "Answer 2" }
-              ]
-           }
+       const prompt = `
+            Analyze the attached image of study notes or text carefully.
+            Generate a detailed note breakdown.
 
-            CRITICAL RULES:
-                  1. "flashcards" MUST contain at least 2 to 4 Question & Answer pairs based on the text. DO NOT leave it empty.
-                  2. Output ONLY raw JSON. Do NOT include markdown code blocks (like \`\`\`json) or extra text.
-          `;
+            Respond strictly in valid JSON format with this exact layout:
+            {
+              "title": "A short descriptive title",
+              "summary": "A concise summary of the main idea",
+              "keyPoints": [
+                "Key takeaway 1",
+                "Key takeaway 2"
+              ],
+              "flashcards": [
+                {
+                  "question": "What is the main requirement for success mentioned in the text?",
+                  "answer": "Hard work and dedication."
+                },
+                {
+                  "question": "How does hard work affect character?",
+                  "answer": "It builds discipline, confidence, and resilience."
+                }
+              ]
+            }
+
+            IMPORTANT INSTRUCTIONS:
+            - "flashcards" MUST NOT BE EMPTY. Generate at least 2 to 4 Q&A pairs directly from the text.
+            - Do not wrap in markdown or standard text. Return raw JSON string only.
+        `;
 
 
 
@@ -182,6 +190,8 @@ app.post('/api/notes/process-image', async (req, res) => {
         const cleanedJsonText = aiRawText.replace(/^```json\s*/, '').replace(/```$/, '');
         const parsedData = JSON.parse(cleanedJsonText);
 
+        const generatedCards = parsedData.flashcards || parsedData.flashCards || [];
+
 
 
         const newNote = new Note({
@@ -189,7 +199,7 @@ app.post('/api/notes/process-image', async (req, res) => {
             title: parsedData.title,
             summary: parsedData.summary,
             keyPoints: parsedData.keyPoints,
-            flashCards: parsedData.flashCards
+            flashCards: generatedCards
         });
 
         await newNote.save();
