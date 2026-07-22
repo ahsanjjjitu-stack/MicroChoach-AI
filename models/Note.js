@@ -8,6 +8,11 @@ const noteSchema = new mongoose.Schema({
         required: true
     },
 
+    imageUrl: { 
+        type: String,
+         default: "" 
+        },
+
     title: {
         type: String, 
         required: true

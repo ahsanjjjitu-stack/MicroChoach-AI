@@ -196,6 +196,7 @@ app.post('/api/notes/process-image', async (req, res) => {
 
         const newNote = new Note({
             userId,
+            imageUrl: `data:${mimeType};base64,${imageBase64}`,
             title: parsedData.title,
             summary: parsedData.summary,
             keyPoints: parsedData.keyPoints,
