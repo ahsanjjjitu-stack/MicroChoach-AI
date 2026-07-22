@@ -4,25 +4,53 @@ const mongoose = require('mongoose');
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const dns = require('dns');
+const { GoogleGenAI } = require('@google/genai');
+
+
+
 const User = require('./models/User');
+const Note = require('./models/Note');
+
+
 
 // 1. Initialize Express app ONLY ONCE
 const app = express();
 
+
+
 // Set DNS servers to avoid resolution issues
 dns.setServers(['8.8.8.8', '8.8.4.4']);
+
+
 
 // 2. Middlewares (Must be before routes)
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
 
+
+
+
+
+// 2. Middlewares (Payload limit 50mb barano hoise large Base64 image-er jonno)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true}));
+
+
+
 // Google Auth Client Setup (Fixed spelling: GOOGLE_CLIENT_ID)
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const ai = new GoogleGenAI({apiKey: process.env.GOOGLE_API_KEY});
+
+
+
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI || process.env.MONGO_URL)
     .then(() => console.log('MongoDB Connected 🚀'))
     .catch(err => console.error('MongoDB Connection Error:', err));
+
+
+
 
 // Google Login / Signup Endpoint
 app.post('/api/auth/google-login', async (req, res) => {
@@ -72,6 +100,128 @@ app.post('/api/auth/google-login', async (req, res) => {
         });
     }
 });
+
+
+
+
+
+
+
+// process google gen ai request 
+
+app.post('/api/notes/process-image', async (req, res) => {
+
+    try {
+        console.log("Processing Note Request Received...");
+        const { imageBase64, mimeType = 'image/jpeg', userId } =  req.body;
+        
+        if (!imageBase64) {
+            return res.status(400).json({ success: false, message: 'imageBase64 is required.' });
+        }
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: 'userId is required.' });
+        }
+
+
+        const prompt = `Analyze the attached image of study notes or text. 
+            Extract the content and return a strict JSON object with this exact structure:
+            {
+              "title": "Short suitable title derived from content",
+              "summary": "Concise high-level summary of the note",
+              "keyPoints": ["Point 1", "Point 2", "Point 3"],
+              "flashcards": [
+                { "question": "Q1", "answer": "A1" },
+                { "question": "Q2", "answer": "A2" }
+              ]
+            }
+            Do not include any markdown formatting (like \`\`\`json) or extra explanation text. Only output raw JSON.
+        `;
+
+
+
+
+
+        // call gemei model
+        const response = await ai.models.generateContent({
+
+            model: 'gemini-2.5-flash',
+            contents: [
+                {
+                    role: 'user',
+                    parts: [
+                        { text: prompt },
+                        {
+                            inlineData: {
+                                mimeType: mimeType,
+                                data: imageBase64
+                            }
+                        }
+                      ]
+                  }
+              ]
+
+        });
+
+
+
+
+        const aiRawText = response.text.trim();
+
+
+
+
+        // Clean markdown wrapper if Gemini adds it
+        const cleanedJsonText = aiRawText.replace(/^```json\s*/, '').replace(/```$/, '');
+        const parsedData = JSON.parse(cleanedJsonText);
+
+
+
+        const newNote = new Note({
+            userId,
+            title: parsedData.title,
+            summary: parsedData.summary,
+            keyPoints: parsedData.keyPoints,
+            flashCards: parsedData.flashCards
+        });
+
+        await newNote.save();
+
+
+
+        res.status(201).json({
+            success: true,
+            message: 'Note processed and saved successfully!',
+            note: newNote
+        });
+
+
+    }
+    catch (error){
+        console.error('Gemini Processing Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to process note image',
+            error: error.message
+        });
+    }
+
+
+
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Port declaration fixed syntax
 const PORT = process.env.PORT || 5000;
