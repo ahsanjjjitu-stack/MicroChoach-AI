@@ -235,6 +235,32 @@ app.post('/api/notes/process-image', async (req, res) => {
 
 
 
+//  get all note for user
+
+app.get('/api/notes', async (req, res) => {
+    try {
+        const userId = req.query.userId;
+        const notes = await Note.find({ userId });
+        res.status(200).json({
+            success: true,
+            message: 'Notes fetched successfully',
+            notes: notes
+        });
+    } catch (error) {
+        console.error('Error fetching notes:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch notes',
+            error: error.message
+        });
+    }
+});
+
+
+
+
+
+
 
 
 
