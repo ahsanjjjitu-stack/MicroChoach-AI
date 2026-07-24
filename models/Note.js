@@ -8,6 +8,11 @@ const noteSchema = new mongoose.Schema({
         required: true
     },
 
+    sessionId: {
+        type: String,
+        required: true
+    },
+
     imageUrl: { 
         type: String,
          default: "" 
@@ -15,7 +20,7 @@ const noteSchema = new mongoose.Schema({
 
     title: {
         type: String, 
-        required: true
+        default: "New Note"
     },
 
     summary: {

@@ -113,7 +113,7 @@ app.post('/api/notes/process-image', async (req, res) => {
 
     try {
         console.log("Processing Note Request Received...");
-        const { imageBase64, mimeType = 'image/jpeg', userId } =  req.body;
+        const { imageBase64, userId, sessionId } =  req.body;
         
         if (!imageBase64) {
             return res.status(400).json({ success: false, message: 'imageBase64 is required.' });
@@ -122,6 +122,9 @@ app.post('/api/notes/process-image', async (req, res) => {
         if (!userId) {
             return res.status(400).json({ success: false, message: 'userId is required.' });
         }
+
+
+        const mimeType = 'image/png';
 
 
        const prompt = `
@@ -196,8 +199,9 @@ app.post('/api/notes/process-image', async (req, res) => {
 
         const newNote = new Note({
             userId,
+            sessionId,
             imageUrl: `data:${mimeType};base64,${imageBase64}`,
-            title: parsedData.title,
+            title: parsedData.title || 'Untitled Note',
             summary: parsedData.summary,
             keyPoints: parsedData.keyPoints,
             flashCards: generatedCards
@@ -216,7 +220,7 @@ app.post('/api/notes/process-image', async (req, res) => {
 
     }
     catch (error){
-        console.error('Gemini Processing Error:', error);
+        console.error('MicroChoach Processing Error:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to process note image',
@@ -227,6 +231,8 @@ app.post('/api/notes/process-image', async (req, res) => {
 
 
 });
+
+
 
 
 
@@ -251,15 +257,39 @@ app.get('/api/notes/user/:userId', async (req, res) => {
 
 
 
-        const notes = await Note.find({ userId: userId }).sort({ createdAt: -1 });
 
 
 
 
-   res.status(200).json({
+        const sessions = await Note.aggregate([
+
+            { $match: { userId: userId } },
+            { $sort: { createdAt: -1 } },
+            { $group: {
+                 _id: '$sessionId', 
+                title: { $first: '$title' },
+                createAt: { $first: '$createdAt' }
+             }},
+            { $sort: { createdAt: -1 } }
+
+        ]);
+
+
+        const sessionList = sessions.map(s => {
+            return {
+                sessionId: s._id,
+                title: s.title,
+                createdAt: s.createAt
+            }
+        })
+
+
+
+
+
+        res.status(200).json({
             success: true,
-            count: notes.length,
-            notes: notes
+            sessions: sessionList
         });
 
 
@@ -274,6 +304,53 @@ app.get('/api/notes/user/:userId', async (req, res) => {
         });
     }
 });
+
+
+
+
+
+
+
+
+
+
+
+// get message for a spesific session
+app.get('/api/notes/session-messages/:sessionId', async (req, res) =>{
+
+    try{
+
+        const { sessionId } = req.params;
+
+
+        if (!sessionId) {
+            return res.status(400).json({ success: false, message: "sessionId is required" });
+        }
+
+
+        const notes = (await Note.find({ sessionId: sessionId })).sort({ createAt: 1 });
+
+
+        res.status(200).json({
+            success: true,
+            count: notes.lenght,
+            notes: notes
+        });
+
+
+
+    }
+    catch(errpr){
+        console.error("Get Session Messages Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch session messages",
+            error: error.message
+        });
+    }
+
+})
+
 
 
 
