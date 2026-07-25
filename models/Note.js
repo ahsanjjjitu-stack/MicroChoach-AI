@@ -2,38 +2,28 @@ const mongoose = require('mongoose');
 
 const noteSchema = new mongoose.Schema({
 
-    userId: {
-        type: String,
-        ref: 'User',
-        required: true
-    },
-
     sessionId: {
         type: String,
-        required: true
+        required: true,
+        index: true
     },
 
-    imageUrl: { 
-        type: String,
-         default: "" 
-        },
-
-    title: {
-        type: String, 
-        default: "New Note"
-    },
-
-    summary: {
+    userId: {
         type: String,
         required: true
     },
 
-
-    keyPoints: [{
+    imageUrl: {
         type: String,
-    }],
+        required: true
+    },
 
-    flashCards: [{
+    title: String,
+    summary: String,
+
+    keyPoints: [String],
+
+    flashCards:[{
         question: String,
         answer: String
     }],
@@ -42,7 +32,7 @@ const noteSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
-    
+
 
 });
 

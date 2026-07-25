@@ -6,43 +6,22 @@ const jwt = require('jsonwebtoken');
 const dns = require('dns');
 const { GoogleGenAI } = require('@google/genai');
 
-
-
 const User = require('./models/User');
+const Session = require('./models/Session');
 const Note = require('./models/Note');
 
-
-
-// 1. Initialize Express app ONLY ONCE
 const app = express();
-
-
 
 // Set DNS servers to avoid resolution issues
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
-
-
-// 2. Middlewares (Must be before routes)
-app.use(express.json()); 
-app.use(express.urlencoded({ extended: true }));
-
-
-
-
-
-// 2. Middlewares (Payload limit 50mb barano hoise large Base64 image-er jonno)
+// Middlewares (Payload limit 50mb for Base64 image)
 app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true}));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-
-
-// Google Auth Client Setup (Fixed spelling: GOOGLE_CLIENT_ID)
+// Google Auth Client & Gemini Setup
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const ai = new GoogleGenAI({apiKey: process.env.GOOGLE_API_KEY});
-
-
-
+const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI || process.env.MONGO_URL)
@@ -50,19 +29,16 @@ mongoose.connect(process.env.MONGO_URI || process.env.MONGO_URL)
     .catch(err => console.error('MongoDB Connection Error:', err));
 
 
-
-
-// Google Login / Signup Endpoint
+// 1. Google Login / Signup Endpoint
 app.post('/api/auth/google-login', async (req, res) => {
     try {
-        console.log("Received Body:", req.body);
+        console.log("Received Auth Request");
         const { idToken } = req.body;
 
         if (!idToken) {
             return res.status(400).json({ success: false, message: "idToken is required" });
         }
 
-        // Verify idToken
         const ticket = await client.verifyIdToken({
             idToken: idToken,
             audience: process.env.GOOGLE_CLIENT_ID
@@ -71,14 +47,12 @@ app.post('/api/auth/google-login', async (req, res) => {
         const payload = ticket.getPayload();
         const { sub: googleId, email } = payload;
 
-        // Find or Create User in MongoDB
         let user = await User.findOne({ googleId });
         if (!user) {
             user = new User({ googleId, email });
             await user.save();
         }
 
-        // Generate JWT
         const token = jwt.sign(
             { userId: user._id }, 
             process.env.JWT_SECRET || 'secretkey'
@@ -102,18 +76,63 @@ app.post('/api/auth/google-login', async (req, res) => {
 });
 
 
+// 2. Get User Sessions
+app.get('/session/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: "userId is required" });
+        }
+
+        const sessions = await Session.find({ userId })
+            .select('_id title createdAt')
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            sessions: sessions.map(s => ({
+                sessionId: s._id.toString(),
+                title: s.title,
+                createdAt: s.createdAt
+            }))
+        });
+
+    } catch (error) {
+        console.error('Error fetching sessions:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
 
 
+// 3. Get Session Messages
+app.get('/session-message/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        if (!sessionId) {
+            return res.status(400).json({ success: false, message: "sessionId is required" });
+        }
+
+        const notes = await Note.find({ sessionId }).sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            notes: notes
+        });
+
+    } catch (error) {
+        console.error('Error fetching session messages:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
 
 
-
-// process google gen ai request 
-
+// 4. Process Image with Gemini AI
 app.post('/api/notes/process-image', async (req, res) => {
-
     try {
         console.log("Processing Note Request Received...");
-        const { imageBase64, userId, sessionId } =  req.body;
+        const { imageBase64, userId, sessionId, mimeType } = req.body;
         
         if (!imageBase64) {
             return res.status(400).json({ success: false, message: 'imageBase64 is required.' });
@@ -123,11 +142,11 @@ app.post('/api/notes/process-image', async (req, res) => {
             return res.status(400).json({ success: false, message: 'userId is required.' });
         }
 
+        // Clean Base64 String if prefix attached
+        const cleanBase64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+        const imageMimeType = mimeType || 'image/jpeg';
 
-        const mimeType = 'image/png';
-
-
-       const prompt = `
+        const prompt = `
             Analyze the attached image of study notes or text carefully.
             Generate a detailed note breakdown.
 
@@ -143,10 +162,6 @@ app.post('/api/notes/process-image', async (req, res) => {
                 {
                   "question": "What is the main requirement for success mentioned in the text?",
                   "answer": "Hard work and dedication."
-                },
-                {
-                  "question": "How does hard work affect character?",
-                  "answer": "It builds discipline, confidence, and resilience."
                 }
               ]
             }
@@ -156,14 +171,9 @@ app.post('/api/notes/process-image', async (req, res) => {
             - Do not wrap in markdown or standard text. Return raw JSON string only.
         `;
 
-
-
-
-
-        // call gemei model
-        const response = await ai.models.generateContent({
-
-            model: 'gemini-2.5-flash',
+        // Call Gemini Model
+        const geminiResponse = await ai.models.generateContent({
+            model: 'gemini-1.5-flash', // Correct Model Name
             contents: [
                 {
                     role: 'user',
@@ -171,199 +181,70 @@ app.post('/api/notes/process-image', async (req, res) => {
                         { text: prompt },
                         {
                             inlineData: {
-                                mimeType: mimeType,
-                                data: imageBase64
+                                mimeType: imageMimeType,
+                                data: cleanBase64
                             }
                         }
-                      ]
-                  }
-              ]
-
+                    ]
+                }
+            ]
         });
 
+        // Parse AI Output
+        let aiAnalysisResult;
+        try {
+            const rawText = geminiResponse.text.replace(/```json|```/g, '').trim();
+            aiAnalysisResult = JSON.parse(rawText);
+        } catch (e) {
+            console.error("Failed to parse AI response as JSON:", geminiResponse.text);
+            return res.status(500).json({ success: false, message: "AI response formatting error" });
+        }
 
+        // Handle Session
+        let activeSessionId = sessionId;
+        let session = null;
 
+        if (activeSessionId) {
+            session = await Session.findById(activeSessionId);
+        }
 
-        const aiRawText = response.text.trim();
+        if (!session) {
+            session = new Session({
+                userId: userId,
+                title: aiAnalysisResult.title || 'New Chat'
+            });
 
+            await session.save();
+            activeSessionId = session._id.toString();
+        }
 
-
-
-        // Clean markdown wrapper if Gemini adds it
-        const cleanedJsonText = aiRawText.replace(/^```json\s*/, '').replace(/```$/, '');
-        const parsedData = JSON.parse(cleanedJsonText);
-
-        const generatedCards = parsedData.flashcards || parsedData.flashCards || [];
-
-
-
+        // Save Note
         const newNote = new Note({
-            userId,
-            sessionId,
-            imageUrl: `data:${mimeType};base64,${imageBase64}`,
-            title: parsedData.title || 'Untitled Note',
-            summary: parsedData.summary,
-            keyPoints: parsedData.keyPoints,
-            flashCards: generatedCards
+            sessionId: activeSessionId,
+            userId: userId,
+            imageUrl: imageBase64,
+            title: aiAnalysisResult.title,
+            summary: aiAnalysisResult.summary,
+            keyPoints: aiAnalysisResult.keyPoints,
+            flashcards: aiAnalysisResult.flashcards || aiAnalysisResult.flashCards
         });
 
         await newNote.save();
 
-
-
-        res.status(201).json({
+        return res.status(200).json({
             success: true,
-            message: 'Note processed and saved successfully!',
+            sessionId: activeSessionId, 
             note: newNote
         });
 
-
-    }
-    catch (error){
-        console.error('MicroChoach Processing Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to process note image',
-            error: error.message
-        });
-    }
-
-
-
-});
-
-
-
-
-
-
-
-
-
-
-//  get all note for user
-
-app.get('/api/notes/user/:userId', async (req, res) => {
-    try {
-       
-        const { userId } = req.params;
-
-        if(!userId){
-            return res.status(400).json({ 
-                success: false, 
-                message: "userId parameter is required" 
-            });
-        }
-
-
-
-
-
-
-
-        const sessions = await Note.aggregate([
-
-            { $match: { userId: userId } },
-            { $sort: { createdAt: -1 } },
-            { $group: {
-                 _id: '$sessionId', 
-                title: { $first: '$title' },
-                createAt: { $first: '$createdAt' }
-             }},
-            { $sort: { createdAt: -1 } }
-
-        ]);
-
-
-        const sessionList = sessions.map(s => {
-            return {
-                sessionId: s._id,
-                title: s.title,
-                createdAt: s.createAt
-            }
-        })
-
-
-
-
-
-        res.status(200).json({
-            success: true,
-            sessions: sessionList
-        });
-
-
-
-
     } catch (error) {
-      console.error("Get Notes Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch notes",
-            error: error.message
-        });
+        console.error('Error processing image:', error);
+        return res.status(500).json({ success: false, message: 'Failed to process note', error: error.message });
     }
 });
 
 
-
-
-
-
-
-
-
-
-
-// get message for a spesific session
-app.get('/api/notes/session-messages/:sessionId', async (req, res) =>{
-
-    try{
-
-        const { sessionId } = req.params;
-
-
-        if (!sessionId) {
-            return res.status(400).json({ success: false, message: "sessionId is required" });
-        }
-
-
-        const notes = (await Note.find({ sessionId: sessionId })).sort({ createAt: 1 });
-
-
-        res.status(200).json({
-            success: true,
-            count: notes.lenght,
-            notes: notes
-        });
-
-
-
-    }
-    catch(errpr){
-        console.error("Get Session Messages Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch session messages",
-            error: error.message
-        });
-    }
-
-})
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Port declaration fixed syntax
+// Server Listener
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT} ⚡`);
