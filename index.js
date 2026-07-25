@@ -77,7 +77,7 @@ app.post('/api/auth/google-login', async (req, res) => {
 
 
 // 2. Get User Sessions
-app.get('/session/:userId', async (req, res) => {
+app.get('/api/notes/sessions/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
 
@@ -106,7 +106,7 @@ app.get('/session/:userId', async (req, res) => {
 
 
 // 3. Get Session Messages
-app.get('/session-message/:sessionId', async (req, res) => {
+app.get('/api/notes/session-messages/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params;
 
