@@ -170,10 +170,12 @@ app.post('/api/notes/process-image', async (req, res) => {
             - "flashcards" MUST NOT BE EMPTY. Generate at least 2 to 4 Q&A pairs directly from the text.
             - Do not wrap in markdown or standard text. Return raw JSON string only.
         `;
+        
 
+        
         // Call Gemini Model
         const geminiResponse = await ai.models.generateContent({
-            model: 'gemini-1.5-flash', // Correct Model Name
+            model: 'gemini-2.5-flash', // Correct Model Name
             contents: [
                 {
                     role: 'user',
