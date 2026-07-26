@@ -158,7 +158,7 @@ app.post('/api/notes/process-image', async (req, res) => {
                 "Key takeaway 1",
                 "Key takeaway 2"
               ],
-              "flashcards": [
+              "flashCards": [
                 {
                   "question": "What is the main requirement for success mentioned in the text?",
                   "answer": "Hard work and dedication."
@@ -167,7 +167,7 @@ app.post('/api/notes/process-image', async (req, res) => {
             }
 
             IMPORTANT INSTRUCTIONS:
-            - "flashcards" MUST NOT BE EMPTY. Generate at least 2 to 4 Q&A pairs directly from the text.
+            - "flashCards" MUST NOT BE EMPTY. Generate at least 2 to 4 Q&A pairs directly from the text.
             - Do not wrap in markdown or standard text. Return raw JSON string only.
         `;
         
