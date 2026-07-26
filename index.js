@@ -228,7 +228,7 @@ app.post('/api/notes/process-image', async (req, res) => {
             title: aiAnalysisResult.title,
             summary: aiAnalysisResult.summary,
             keyPoints: aiAnalysisResult.keyPoints,
-            flashcards: aiAnalysisResult.flashcards || aiAnalysisResult.flashCards
+            flashCards: aiAnalysisResult.flashcards || aiAnalysisResult.flashCards
         });
 
         await newNote.save();
