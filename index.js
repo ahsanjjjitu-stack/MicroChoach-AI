@@ -246,6 +246,52 @@ app.post('/api/notes/process-image', async (req, res) => {
 });
 
 
+
+
+
+
+
+
+
+
+// 5. Delete All Sessions & Notes for a User
+app.delete('/api/notes/clear-all/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: "userId is required" });
+        }
+
+
+
+        await Note.deleteMany({ userId });
+        await Session.deleteMany({ userId });
+
+        console.log(`Cleared all chat history for userId: ${userId}`);
+
+        return res.status(200).json({
+            success: true,
+            message: "All chat history cleared successfully!"
+        });
+
+    } catch (error) {
+        console.error('Error clearing chat history:', error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+
+});
+
+
+
+
+
+
+
+
+
+
+
 // Server Listener
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
